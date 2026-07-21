@@ -62,6 +62,3 @@ O projeto entrega um script em Python de rápida execução que:
 ## 👤 Autor
 
 **Gustavo Santiago Rosa**  
-*Analista de Planejamento | Information Systems*  
-
-[Link para o seu LinkedIn] • [Link para o seu Portfólio/E-mail]
