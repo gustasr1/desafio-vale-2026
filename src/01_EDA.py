@@ -170,4 +170,79 @@ plt.tight_layout()
 plt.show()
 
 # %%
-df_analise_final['TIPO'].value_counts()
+#A análise exploratória visual comprovou que a taxa de alertas críticos (Is_Dont_Go) é nula para Escavadeiras. As falhas ocorrem exclusivamente nos Caminhões (~0,6%).
+
+# %%
+
+df_caminhoes = df_analise_final[df_analise_final['TIPO'] == 'Caminhao']
+coluna_frota = 'FROTA'
+
+analise_frota = df_caminhoes.groupby(coluna_frota).agg(
+    Total_Registros=('Is_Dont_Go', 'count'),
+    Total_Alertas=('Is_Dont_Go', 'sum')
+).reset_index()
+
+analise_frota['Taxa_Falha_Percentual'] = (analise_frota['Total_Alertas'] / analise_tipo['Total_Registros']) * 100
+
+analise_frota = analise_frota.sort_values(by='Taxa_Falha_Percentual', ascending=False)
+
+print(analise_frota.head(10))
+
+plt.figure(figsize=(12, 6))
+sns.barplot(
+    data=analise_frota, 
+    x=coluna_frota, 
+    y='Taxa_Falha_Percentual',
+    palette='Oranges_r'
+)
+
+plt.title('Taxa de Alertas "Don\'t Go" por Tipo de Equipamento', fontsize=14, pad=15)
+plt.xlabel('Frota', fontsize=12)
+plt.ylabel('Taxa de Falha (%)', fontsize=12)
+
+plt.xticks(rotation=45, ha='right')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+plt.tight_layout()
+plt.show()
+
+# %%
+
+apontamentos['FROTA'].value_counts()
+apontamentos['CLASSE'].value_counts()
+# %%
+
+df_frota_2s = df_caminhoes[df_caminhoes['FROTA'] == '793-D 2S'].copy()
+
+analise_classe = df_frota_2s.groupby('CLASSE').agg(
+    Total_Registros=('Is_Dont_Go', 'count'),
+    Total_Alertas=('Is_Dont_Go', 'sum')
+).reset_index()
+
+analise_classe['Taxa_Falha_Percentual'] = (analise_classe['Total_Alertas'] / analise_classe['Total_Registros']) * 100
+
+analise_classe = analise_classe.sort_values(by='Taxa_Falha_Percentual', ascending=False)
+
+print(analise_classe.head(10))
+
+plt.figure(figsize=(12, 6))
+
+sns.barplot(
+    data=analise_classe, 
+    x='CLASSE', 
+    y='Taxa_Falha_Percentual',
+    palette='Purples_r'
+)
+
+plt.title('Taxa de Alertas "Don\'t Go" por Classe da Atividade (Frota 793-D 2S)', fontsize=14, pad=15)
+plt.xlabel('Classe da Atividade', fontsize=12)
+plt.ylabel('Taxa de Falha (%)', fontsize=12)
+
+plt.xticks(rotation=45, ha='right')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+plt.tight_layout()
+plt.show()
+# %%
+
+df_frota_2s.to_parquet('dados_frota_2s.parquet')
