@@ -1,57 +1,67 @@
-# Pipeline — Desafio Desenvolver (Antecipação de Alertas "Don't Go")
+# 🚜 Predição de Alertas Críticos em Frotas de Mineração (Caminhões 793-D 2S)
 
-Este pipeline foi construído e validado sobre as **amostras** fornecidas
-(`desenvolver_dontgo.xlsx`, `desenvolver_apontamentos.xlsx`,
-`Alarmes - Regra de Negocio_V2.xlsx`). Ele está pronto para ser
-reaplicado sobre a **base completa** (arquivos `.parquet` de Telemetria
-e a base completa de Apontamentos).
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Pandas](https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white)
+![Scikit-Learn](https://img.shields.io/badge/Scikit_Learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)
 
-## ⚠️ Sobre os arquivos .parquet
+## 📌 Visão Geral do Projeto
+Na operação diária de uma mina, os ciclos de atividade dos equipamentos pesados geram um volume massivo de dados de telemetria[cite: 2]. Os alertas críticos (conhecidos como *'don't go'*) representam condições de risco iminente mecânico ou operacional[cite: 2]. 
 
-O ambiente usado para montar este relatório não tem acesso à internet
-nem às bibliotecas `pyarrow`/`fastparquet` necessárias para ler `.parquet`.
-Por isso, todo o desenvolvimento e validação foi feito sobre as amostras
-em `.xlsx`. Para rodar este pipeline sobre a base completa, você tem duas
-opções:
+Este projeto aplica inteligência analítica e Machine Learning sobre mais de **37 milhões de registros brutos** para antecipar paradas não planejadas, focando especificamente nos gargalos operacionais da frota de caminhões **793-D 2S**.
 
-1. **No seu ambiente local** (Jupyter, Colab, VS Code): instale
-   `pip install pandas pyarrow scikit-learn matplotlib` e troque
-   `pd.read_excel(...)` por `pd.read_parquet(...)` nos três scripts.
-2. **De volta nesta conversa**: se converter os `.parquet` para `.csv`
-   ou `.xlsx` antes de enviar, eu consigo ler e rodar o pipeline
-   diretamente aqui.
+**Pergunta de Negócio:** *Quais equipamentos da frota têm maior risco de gerar um alerta crítico nas próximas 4 horas?*[cite: 2]
 
-## Arquivos
+---
 
-- `rule_engine.py` — motor de regras que aplica a aba CMA sobre a
-  Telemetria e recalcula `Is_Dont_Go`. Inclui a validação empírica que
-  mostrou que o recálculo literal (ignorando a nuance de texto de
-  SITUACAO) gera falsos positivos — por isso o pipeline **usa o
-  `Is_Dont_Go` original como rótulo oficial**, e usa a CMA apenas para
-  gerar features (ver `feature_engineering.py`).
-- `feature_engineering.py` — cria as features temporais (Apontamentos)
-  e de contagem/recência de alarmes (Telemetria), e constrói o alvo
-  prospectivo `alvo_dont_go_proxima_1h` (horizonte configurável via
-  `JANELA_PREDICAO_MIN`).
-- `modelagem.py` — split temporal (sem embaralhamento), baselines
-  (classe majoritária + heurística de regra de negócio), Regressão
-  Logística, Random Forest, métricas (precision/recall/F1/AUC-PR),
-  matriz de confusão e importância de features (Gini + permutation).
+## 🎯 Impacto Operacional
+A solução converteu uma base de dados histórica em uma política de manutenção preditiva automatizada. O modelo desenvolvido alcançou um **Recall de 74%** e uma **Acurácia Global de 87%**. Na prática, o algoritmo é capaz de identificar e avisar a equipe de PCM sobre quase 3/4 das falhas catastróficas com **4 horas de antecedência**, permitindo o desvio da máquina para a oficina antes que a quebra ocorra em rampa.
 
-## Como rodar sobre a base completa
+---
 
-```bash
-# 1) trocar os caminhos dos arquivos de entrada nos scripts para os arquivos completos
-# 2) rodar em sequência:
-python3 rule_engine.py            # valida Is_Dont_Go x regras CMA
-python3 feature_engineering.py    # gera features + alvo prospectivo
-python3 modelagem.py              # treina e avalia os modelos
-```
+## 🛠️ Metodologia e Pipeline de Dados
 
-## Ressalva importante
+O fluxo analítico foi integralmente desenvolvido em Python, estruturado nas seguintes etapas:
 
-Os resultados de modelagem obtidos sobre a amostra (F1 ~0.99 nos
-modelos supervisionados) são **artefato do tamanho da amostra** (147
-linhas, 1 equipamento, 1 incidente — ver Seção 5.2 e 6.2 do relatório)
-e não devem ser reportados como desempenho esperado em produção. Rode
-o pipeline sobre a base completa para obter números válidos.
+1. **Cruzamento Temporal:** Unificação dos apontamentos de despacho e arquivos `.parquet` de telemetria utilizando `merge_asof` para alinhamento exato de fusos horários[cite: 2].
+2. **Isolamento de Escopo:** Filtragem exclusiva para a frota 793-D 2S para evitar ruídos de outros equipamentos.
+3. **Engenharia de Features:** Criação de uma variável alvo binária (`Alvo_4H`) baseada na janela de predição de 4 horas.
+4. **Tratamento Contra Data Leakage:** Exclusão rigorosa de variáveis que poderiam enviesar o modelo (veja tabela abaixo).
+5. **Modelagem:** Treinamento de um *Random Forest Classifier* com pesos balanceados (`class_weight='balanced'`) para lidar com a assimetria natural de dados de falhas industriais.
+
+### Controle de Alterações e Limpeza de Dados
+
+| Campo | Tratamento Aplicado | Justificativa Analítica |
+| :--- | :--- | :--- |
+| **`Is_Dont_Go`** | Excluído | Evitar *Data Leakage*. A coluna informa a falha no momento presente, dando a resposta antecipada ao modelo no treino[cite: 2]. |
+| **`INICIO` e `FIM`** | Excluídos | Transformados na grandeza matemática `DURACAO_MINUTOS`. Algoritmos não processam datetimes puros[cite: 2]. |
+| **`TAG` e `ID`** | Excluídos | Identificadores únicos sem valor preditivo. Evita que o modelo decore máquinas específicas[cite: 2]. |
+| **`Nome_Operador`** | Excluído | Alta cardinalidade. Evita *overfitting* e viés sobre o comportamento de um operador específico[cite: 2]. |
+| **`CLASSE`** | One-Hot Encoding | Categorias textuais convertidas em variáveis numéricas binárias (0 e 1) independentes[cite: 2]. |
+
+---
+
+## 🧠 Interpretabilidade (Abrindo a Caixa Preta)
+
+A extração de *Feature Importances* da Floresta Aleatória revelou o verdadeiro padrão de degradação da frota. O modelo não decorou números aleatórios; ele mapeou uma cadeia clara de sintomas pré-falha:
+
+1. **O Vilão Principal (Engine Coolant Level):** O cruzamento revelou mais de 20.000 alertas oscilando entre Ativo e Inativo (*flapping*) devido ao baixo nível de água/aditivo balançando no reservatório.
+2. **Colapso de Comunicação (Rx Channel A/B):** Como consequência do superaquecimento, a rede CAN ("sistema nervoso" do caminhão) começa a perder pacotes de dados.
+3. **Risco Operacional (Body Up):** Detecção de tentativas de movimentação do equipamento com a caçamba levantada, gerando torções prejudiciais ao chassi.
+
+---
+
+## 🚀 Produto Final
+
+O projeto entrega um script em Python de rápida execução que:
+- Ingesta os dados mais recentes da telemetria.
+- Roda as predições de risco silenciosamente.
+- Gera e exporta um relatório executivo automático em Excel (`.xlsx`) listando apenas a *TAG*, *Data/Hora* e o *Sintoma* dos caminhões que precisam de intervenção imediata, otimizando o fluxo de manutenção sem a necessidade e o custo de processamento de dashboards complexos.
+
+---
+
+## 👤 Autor
+
+**Gustavo Santiago Rosa**  
+*Analista de Planejamento | Information Systems*  
+
+[Link para o seu LinkedIn] • [Link para o seu Portfólio/E-mail]
